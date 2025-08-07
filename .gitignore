@@ -212,3 +212,9 @@ cython_debug/
 # Stockfish folder - ignore contents but keep folder structure
 models/stockfish/*
 !models/stockfish/.gitkeep
+
+# Outputs and generated files
+outputs/
+
+# Jupyter notebooks (exclude large notebooks with outputs)
+*.ipynb
