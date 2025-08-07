@@ -23,7 +23,7 @@ This project investigates how AI models explore solution spaces through various 
 ## Project Structure
 
 ```
-solution-space-hacking/
+eh-apps/
 ├── .venv/                  # Virtual environment (created by uv)
 ├── config/                 # Configuration files
 │   └── evaluation_config.yaml  # Evaluation pipeline settings
@@ -151,8 +151,8 @@ deactivate
 
 1. **Clone the repository**:
    ```bash
-   git clone <repository-url>
-   cd solution-space-hacking
+   git clone <repository-url>  
+cd eh-apps
    ```
 
 2. **Set up the environment**:

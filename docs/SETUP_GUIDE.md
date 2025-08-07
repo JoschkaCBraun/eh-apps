@@ -11,7 +11,7 @@
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd solution-space-hacking
+   cd eh-apps
    ```
 
 2. **Set up environment**

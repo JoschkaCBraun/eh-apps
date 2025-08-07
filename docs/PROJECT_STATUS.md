@@ -183,7 +183,7 @@ Evaluation Phase: scripts/run_evaluation.py
 
 ## Repository Structure
 ```
-solution-space-hacking/
+eh-apps/
 ├── config/                      # Configuration files
 │   └── evaluation_config.yaml   # Pipeline settings
 ├── src/
