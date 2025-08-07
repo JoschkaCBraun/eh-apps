@@ -1,0 +1,38 @@
+# Model Configuration for Local Inference
+# Optimized for single H100 80GB GPU
+
+qwen3_14b_fp8:
+  model_id: "Qwen/Qwen3-14B-FP8"
+  tokenizer_id: "Qwen/Qwen3-14B-FP8"  # Same as model_id unless specified otherwise
+  
+  # Device configuration
+  device:
+    type: "cuda"  # Use GPU
+    device_index: 0  # Explicitly use cuda:0 for single GPU
+    
+  # Model loading configuration  
+  loading:
+    torch_dtype: "auto"  # Use auto to leverage FP8 quantization from model
+    use_safetensors: true  # Use safetensors format for faster loading
+    trust_remote_code: true  # Required for Qwen models
+    low_cpu_mem_usage: true  # Reduce CPU memory usage during loading
+    
+  # Generation parameters
+  generation:
+    max_new_tokens: 6000  # Maximum tokens to generate
+    temperature: 0.1  # Low temperature for more deterministic outputs
+    top_p: 0.95  # Nucleus sampling parameter
+    top_k: 50  # Top-k sampling parameter
+    do_sample: true  # Enable sampling (required for temperature > 0)
+  
+  # Storage configuration
+  storage:
+    cache_dir: "~/.cache/huggingface/hub/"  # HuggingFace cache directory
+    download_if_missing: true  # Download model if not found locally
+  
+  # Memory management
+  memory:
+    clear_cache_after_load: true  # Clear CUDA cache after model loading
+    periodic_cleanup: true  # Enable periodic memory cleanup during evaluation
+    cleanup_interval: 10  # Clean up every N evaluations
+  

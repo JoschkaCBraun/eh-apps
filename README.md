@@ -1,6 +1,6 @@
 # Solution Space Hacking
 
-A research project focused on exploring how AI models choose which part of the solution space to explore during rollouts and training.
+A research project focused on exploring how AI models choose which part of the solution space to explore during rollouts and training. Now equipped with local inference capabilities using Qwen3-32B on H100 80GB GPU infrastructure.
 
 ## Overview
 
@@ -9,6 +9,8 @@ This project investigates how AI models explore solution spaces through various 
 - Model solution space exploration patterns
 - Rollout behavior analysis
 - Training data influence on solution space exploration
+- Local inference with Qwen3-32B model (full precision on H100 GPU)
+- Comparative analysis between API and local models
 
 ## Guidelines
 
@@ -26,9 +28,10 @@ This project investigates how AI models explore solution spaces through various 
 eh-apps/
 ├── .venv/                  # Virtual environment (created by uv)
 ├── config/                 # Configuration files
-│   └── evaluation_config.yaml  # Evaluation pipeline settings
+│   ├── evaluation_config.yaml  # Evaluation pipeline settings
+│   └── model_config.yaml       # Local model configurations (Qwen3-32B)
 ├── data/                   # Data storage
-│   ├── apps/               # APPS dataset
+│   ├── APPS/               # APPS dataset
 │   │   ├── raw/            # Raw APPS dataset
 │   │   └── cleaned/        # Cleaned and processed APPS dataset
 │   ├── generation_outputs/ # Model generation outputs
@@ -45,6 +48,7 @@ eh-apps/
 │       ├── experiments/    # Experimental code and data
 │       └── notes/          # Research notes and ideas
 ├── src/                    # Source code
+│   ├── apps_utils/         # APPS dataset utilities
 │   ├── apps/               # APPS dataset handling (module only)
 │   ├── evaluation/         # Model evaluation utilities
 │   │   ├── model_evaluator.py    # Main evaluation orchestrator
@@ -56,19 +60,29 @@ eh-apps/
 │   ├── openrouter/         # OpenRouter API integration
 │   │   ├── async_client.py       # Optimized async API client
 │   │   └── openrouter_models.py  # Model configurations
-│   ├── utils/              # Utility functions (including dataset_loader.py)
+│   ├── utils/              # Utility functions
+│   │   ├── dataset_loader.py      # APPS dataset loading
+│   │   └── load_model.py         # Local model loader (Qwen3-32B)
 │   └── visualization/      # Results visualization
 ├── tests/                  # Test files
 ├── scripts/
 │   ├── run_generation.py   # Model generation script
 │   ├── run_evaluation.py   # Evaluation script
-│   └── run_full_pipeline.py # Full pipeline script
+│   ├── run_full_pipeline.py # Full pipeline script
+│   └── test_qwen_model.py  # Test script for Qwen3-32B
 ├── pyproject.toml          # Project configuration and dependencies
 ├── uv.lock                 # Locked dependency versions
 └── .env                    # Environment variables (not in git)
 ```
 
 ## Key Modules
+
+### Model Loading (`src/utils/load_model.py`)
+- **Local Inference**: Support for Qwen3-32B model on H100 GPU
+- **Full Precision**: Runs in float16 for optimal quality
+- **Memory Management**: Automatic GPU memory optimization
+- **Batch Processing**: Configurable batch sizes for efficient inference
+- **Chat Templates**: Automatic conversation formatting
 
 ### APPS Module (`src/apps/`)
 - **Module Only**: The apps module now serves as an empty module placeholder
@@ -106,7 +120,11 @@ This project uses [uv](https://github.com/astral-sh/uv) for Python package manag
 
 1. **Install uv** (if not already installed):
    ```bash
-   brew install uv  # macOS
+   # Linux/H100 environment
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   
+   # macOS (if developing locally)
+   brew install uv
    ```
 
 2. **Install dependencies**:
@@ -160,15 +178,24 @@ cd eh-apps
    uv sync
    ```
 
-3. **Set up environment variables**:
+3. **Set up environment variables** (optional for API usage):
    ```bash
    cp .env.example .env  # if available
-   # Edit .env with your API keys
+   # Edit .env with your API keys (if using OpenRouter)
    ```
 
-4. **Run experiments**:
+4. **Verify GPU setup** (for local inference):
    ```bash
-   # Generate model outputs
+   nvidia-smi  # Check GPU availability
+   uv run python -c "import torch; print(torch.cuda.is_available())"
+   ```
+
+5. **Run experiments**:
+   ```bash
+   # Test local model (Qwen3-32B)
+   uv run python scripts/test_qwen_model.py
+   
+   # Generate model outputs (API)
    uv run python scripts/run_generation.py --n-problems 50 --split eval
    
    # Evaluate existing outputs
@@ -189,9 +216,21 @@ cd eh-apps
 - **Visualizations**: Plots and figures in `data/figures/`
 - **Experiments**: Experimental datasets in `data/experiments/`
 
+## Hardware Requirements
+
+### For Local Inference (Qwen3-32B)
+- **GPU**: NVIDIA H100 80GB (or equivalent with 65GB+ VRAM)
+- **RAM**: 32GB+ system memory
+- **Storage**: 100GB+ for model weights
+- **CUDA**: Version 12.0 or higher
+
+### For API-Only Usage
+- Any system with Python 3.11+ and internet connection
+
 ## Documentation
 
 - **General**: See `docs/` for project documentation
+- **Setup Guide**: Complete setup instructions in `docs/SETUP_GUIDE.md`
 - **Project Status**: Current implementation status in `docs/PROJECT_STATUS.md`
 - **Pipeline Architecture**: Detailed architecture guide in `docs/PIPELINE_ARCHITECTURE.md`
 - **Prompt Format**: Comprehensive prompt format guide in `docs/PROMPT_FORMAT_GUIDE.md`

@@ -1,6 +1,6 @@
 # Ignore data folder entirely
-data/
-!data/.gitkeep
+APPS/
+!APPS/.gitkeep
 
 # Ignore external_repo folder
 external_repo/

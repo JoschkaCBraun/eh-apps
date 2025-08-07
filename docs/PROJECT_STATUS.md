@@ -187,7 +187,7 @@ eh-apps/
 ├── config/                      # Configuration files
 │   └── evaluation_config.yaml   # Pipeline settings
 ├── src/
-│   ├── apps/                    # APPS dataset handling
+│   ├── APPS/                    # APPS dataset handling
 │   ├── evaluation/              # Model evaluation framework
 │   ├── openrouter/              # OpenRouter API integration
 │   ├── utils/                   # Utility functions

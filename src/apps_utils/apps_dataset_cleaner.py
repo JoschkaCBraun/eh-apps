@@ -30,7 +30,7 @@ class APPSDatasetCleaner:
         """Load the raw APPS dataset from HuggingFace."""
         logger.info("Loading raw APPS dataset from HuggingFace...")
         
-        dataset = load_dataset("codeparrot/apps")
+        dataset = load_dataset("codeparrot/apps", trust_remote_code=True)
         
         # Combine train and test splits
         all_data = []

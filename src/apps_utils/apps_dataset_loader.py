@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class APPSDatasetLoader:
     """Load and filter the cleaned APPS dataset."""
     
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str = "data/APPS/cleaned"):
         self.data_dir = Path(data_dir)
         self.splits = ['train', 'eval', 'test']
         self.difficulties = ['introductory', 'interview', 'competition']
@@ -44,14 +44,12 @@ class APPSDatasetLoader:
         self,
         n_samples: int,
         split: str,
-        difficulty: str,
-        min_test_cases: int,
-        max_test_cases: Optional[int],
-        has_solutions: Optional[bool],
-        has_starter_code: Optional[bool],
-        random_seed: Optional[int],
-        recover_types: bool,
-        verbose: bool
+        difficulty: str = "all",
+        min_test_cases: int = 0,
+        max_test_cases: Optional[int] = None,
+        has_solutions: Optional[bool] = None,
+        has_starter_code: Optional[bool] = None,
+        random_seed: Optional[int] = None
     ) -> List[Dict]:
         """
         Load and filter APPS dataset samples.
@@ -59,20 +57,17 @@ class APPSDatasetLoader:
         Args:
             n_samples: Number of samples to load
             split: Dataset split ('train', 'eval', 'test', 'all')
-            difficulty: Difficulty level ('introductory', 'interview', 'competition', 'all')
-            min_test_cases: Minimum number of test cases required
-            max_test_cases: Maximum number of test cases allowed
-            has_solutions: Filter by presence of solutions (True/False/None for no filter)
-            has_starter_code: Filter by presence of starter code (True/False/None for no filter)
-            random_seed: Random seed for reproducible sampling
-            recover_types: Whether to recover original data types using ast.literal_eval()
-            verbose: Whether to print progress information
+            difficulty: Difficulty level ('introductory', 'interview', 'competition', 'all'). Default: 'all'
+            min_test_cases: Minimum number of test cases required. Default: 0
+            max_test_cases: Maximum number of test cases allowed. Default: None
+            has_solutions: Filter by presence of solutions (True/False/None for no filter). Default: None
+            has_starter_code: Filter by presence of starter code (True/False/None for no filter). Default: None
+            random_seed: Random seed for reproducible sampling. Default: None
             
         Returns:
-            List of problem dictionaries
+            List of problem dictionaries with recovered Python types for inputs/outputs
         """
-        if verbose:
-            logger.info(f"Loading {n_samples} samples from {split} split, difficulty: {difficulty}")
+        logger.info(f"Loading {n_samples} samples from {split} split")
         
         # Load data
         if split == "all":
@@ -88,7 +83,7 @@ class APPSDatasetLoader:
         # Apply filters
         df = self._apply_filters(
             df, difficulty, min_test_cases, max_test_cases, 
-            has_solutions, has_starter_code, verbose
+            has_solutions, has_starter_code
         )
         
         if len(df) == 0:
@@ -96,8 +91,7 @@ class APPSDatasetLoader:
         
         # Sample data
         if n_samples > len(df):
-            if verbose:
-                logger.warning(f"Requested {n_samples} samples but only {len(df)} available. Using all available samples.")
+            logger.warning(f"Requested {n_samples} samples but only {len(df)} available. Using all available samples.")
             n_samples = len(df)
         
         if random_seed is not None:
@@ -110,18 +104,11 @@ class APPSDatasetLoader:
         for _, row in sampled_df.iterrows():
             problem = row.to_dict()
             
-            # Recover original data types if requested
-            if recover_types:
-                problem = self._recover_data_types(problem)
-            
+            # Always recover original data types for proper test execution
+            problem = self._recover_data_types(problem)
             problems.append(problem)
         
-        if verbose:
-            logger.info(f"Successfully loaded {len(problems)} problems")
-            if len(problems) > 0:
-                difficulty_counts = pd.Series([p['difficulty'] for p in problems]).value_counts()
-                logger.info(f"Difficulty distribution: {dict(difficulty_counts)}")
-        
+        logger.info(f"Successfully loaded {len(problems)} problems")
         return problems
     
     def _apply_filters(
@@ -131,29 +118,20 @@ class APPSDatasetLoader:
         min_test_cases: int,
         max_test_cases: Optional[int],
         has_solutions: Optional[bool],
-        has_starter_code: Optional[bool],
-        verbose: bool
+        has_starter_code: Optional[bool]
     ) -> pd.DataFrame:
         """Apply filters to the dataset."""
-        original_len = len(df)
-        
         # Filter by difficulty
         if difficulty != "all":
             if difficulty not in self.difficulties:
                 raise ValueError(f"Difficulty must be one of {self.difficulties}, got {difficulty}")
             df = df[df['difficulty'] == difficulty]
-            if verbose:
-                logger.info(f"Filtered by difficulty '{difficulty}': {len(df)} problems")
         
         # Filter by test case count
         df = df[df['n_test_cases'] >= min_test_cases]
-        if verbose:
-            logger.info(f"Filtered by min_test_cases >= {min_test_cases}: {len(df)} problems")
         
         if max_test_cases is not None:
             df = df[df['n_test_cases'] <= max_test_cases]
-            if verbose:
-                logger.info(f"Filtered by max_test_cases <= {max_test_cases}: {len(df)} problems")
         
         # Filter by solutions
         if has_solutions is not None:
@@ -161,8 +139,6 @@ class APPSDatasetLoader:
                 df = df[df['n_solutions'] > 0]
             else:
                 df = df[df['n_solutions'] == 0]
-            if verbose:
-                logger.info(f"Filtered by has_solutions={has_solutions}: {len(df)} problems")
         
         # Filter by starter code
         if has_starter_code is not None:
@@ -170,11 +146,6 @@ class APPSDatasetLoader:
                 df = df[df['starter_code'].str.len() > 0]
             else:
                 df = df[df['starter_code'].str.len() == 0]
-            if verbose:
-                logger.info(f"Filtered by has_starter_code={has_starter_code}: {len(df)} problems")
-        
-        if verbose:
-            logger.info(f"Total filtering: {original_len} -> {len(df)} problems")
         
         return df
     
@@ -283,7 +254,7 @@ class APPSDatasetLoader:
 
 def main():
     """Main function to test the dataset loader."""
-    loader = APPSDatasetLoader(data_dir="data/APPS/cleaned")
+    loader = APPSDatasetLoader()  # Uses default path
     
     # Print dataset information
     loader.print_dataset_info()
