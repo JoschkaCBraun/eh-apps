@@ -12,8 +12,8 @@ class AnswerExtractor:
     """Extracts answers from model outputs using tag-based parsing."""
     
     def __init__(self):
-        self.thinking_pattern = re.compile(r'<thinking>(.*?)</thinking>', re.DOTALL)
-        self.code_pattern = re.compile(r'<code>(.*?)</code>', re.DOTALL)
+        self.thinking_pattern = re.compile(r'<think>(.*?)</think>', re.DOTALL)
+        self.answer_pattern = re.compile(r'<answer>(.*?)</answer>', re.DOTALL)
         # Patterns for counting for loops and function definitions
         self.for_loop_pattern = re.compile(r'\bfor\s+.*?:')
         self.function_def_pattern = re.compile(r'\bdef\s+\w+\s*\(')
@@ -31,8 +31,8 @@ class AnswerExtractor:
         Returns:
             Dictionary containing:
                 - full_output: Complete model output (always stored)
-                - thinking: Content from <thinking> tags (empty string if not found)
-                - code: Content from <code> tags (empty string if not found)
+                - thinking: Content from <think> tags (empty string if not found)
+                - answer: Content from <answer> tags (empty string if not found)
                 - thinking_found: Boolean indicating if valid thinking tags were found
                 - code_found: Boolean indicating if valid code tags were found
                 - for_loop_count: Number of for loops in the code
@@ -44,10 +44,10 @@ class AnswerExtractor:
         # Always store the full output
         result = {
             "full_output": model_output,
-            "thinking": "",
-            "code": "",
-            "thinking_found": False,
-            "code_found": False,
+            "think": "",
+            "answer": "",
+            "think_found": False,
+            "answer_found": False,
             "for_loop_count": 0,
             "function_def_count": 0,
             "curly_brace_count": 0,
@@ -58,48 +58,48 @@ class AnswerExtractor:
         # Try optimal case first - properly formatted tags
         thinking_match = self.thinking_pattern.search(model_output)
         if thinking_match:
-            result["thinking"] = thinking_match.group(1).strip()
-            result["thinking_found"] = True
+            result["think"] = thinking_match.group(1).strip()
+            result["think_found"] = True
         else:
             # Fallback: look for exactly 2 occurrences of "thinking" (case insensitive)
             thinking_positions = []
-            for match in re.finditer(r'</?thinking>', model_output, re.IGNORECASE):
+            for match in re.finditer(r'</?think>', model_output, re.IGNORECASE):
                 thinking_positions.append((match.start(), match.end()))
             
             if len(thinking_positions) >= 2:
                 # Use outermost occurrences (first and last)
                 start_pos = thinking_positions[0][1]  # After first tag
                 end_pos = thinking_positions[-1][0]   # Before last tag
-                result["thinking"] = model_output[start_pos:end_pos].strip()
-                result["thinking_found"] = True
+                result["think"] = model_output[start_pos:end_pos].strip()
+                result["think_found"] = True
         
         # Extract code content
-        code_match = self.code_pattern.search(model_output)
-        if code_match:
-            code_content = code_match.group(1).strip()
-            result["code"] = self._clean_code(code_content)
-            result["code_found"] = True
+        answer_match = self.answer_pattern.search(model_output)
+        if answer_match:
+            answer_content = answer_match.group(1).strip()
+            result["answer"] = self._clean_code(answer_content)
+            result["answer_found"] = True
         else:
             # Fallback: look for exactly 2 occurrences of "code" (case insensitive)
-            code_positions = []
-            for match in re.finditer(r'</?code>', model_output, re.IGNORECASE):
-                code_positions.append((match.start(), match.end()))
+            answer_positions = []
+            for match in re.finditer(r'</?answer>', model_output, re.IGNORECASE):
+                answer_positions.append((match.start(), match.end()))
             
-            if len(code_positions) >= 2:
+            if len(answer_positions) >= 2:
                 # Use outermost occurrences (first and last)
-                start_pos = code_positions[0][1]  # After first tag
-                end_pos = code_positions[-1][0]   # Before last tag
-                code_content = model_output[start_pos:end_pos].strip()
-                result["code"] = self._clean_code(code_content)
-                result["code_found"] = True
+                start_pos = answer_positions[0][1]  # After first tag
+                end_pos = answer_positions[-1][0]   # Before last tag
+                answer_content = model_output[start_pos:end_pos].strip()
+                result["answer"] = self._clean_code(answer_content)
+                result["answer_found"] = True
         
         # Count for loops and function definitions if code was found
-        if result["code_found"] and result["code"]:
-            result["for_loop_count"] = len(self.for_loop_pattern.findall(result["code"]))
-            result["function_def_count"] = len(self.function_def_pattern.findall(result["code"]))
-            result["curly_brace_count"] = len(self.curly_brace_pattern.findall(result["code"]))
-            result["set_constructor_count"] = len(self.set_constructor_pattern.findall(result["code"]))
-            result["dict_constructor_count"] = len(self.dict_constructor_pattern.findall(result["code"]))
+        if result["answer_found"] and result["answer"]:
+            result["for_loop_count"] = len(self.for_loop_pattern.findall(result["answer"]))
+            result["function_def_count"] = len(self.function_def_pattern.findall(result["answer"]))
+            result["curly_brace_count"] = len(self.curly_brace_pattern.findall(result["answer"]))
+            result["set_constructor_count"] = len(self.set_constructor_pattern.findall(result["answer"]))
+            result["dict_constructor_count"] = len(self.dict_constructor_pattern.findall(result["answer"]))
         
         return result
     
@@ -145,28 +145,28 @@ class AnswerExtractor:
             Dictionary with validation results
         """
         # Check for opening tags
-        thinking_open = '<thinking>' in model_output
-        thinking_close = '</thinking>' in model_output
-        code_open = '<code>' in model_output
-        code_close = '</code>' in model_output
+        think_open = '<think>' in model_output
+        think_close = '</think>' in model_output
+        answer_open = '<answer>' in model_output
+        answer_close = '</answer>' in model_output
         
         # Check for proper tag pairs
-        thinking_valid = thinking_open and thinking_close
-        code_valid = code_open and code_close
+        think_valid = think_open and think_close
+        answer_valid = answer_open and answer_close
         
         # Check for tag order (thinking should come before code)
-        thinking_before_code = True
-        if thinking_valid and code_valid:
-            thinking_start = model_output.find('<thinking>')
-            code_start = model_output.find('<code>')
-            thinking_before_code = thinking_start < code_start
+        think_before_answer = True
+        if think_valid and answer_valid:
+            think_start = model_output.find('<think>')
+            answer_start = model_output.find('<answer>')
+            think_before_answer = think_start < answer_start
         
         return {
-            "thinking_tags_valid": thinking_valid,
-            "code_tags_valid": code_valid,
-            "thinking_before_code": thinking_before_code,
-            "has_any_tags": thinking_valid or code_valid,
-            "has_both_tags": thinking_valid and code_valid
+            "think_tags_valid": think_valid,
+            "answer_tags_valid": answer_valid,
+            "think_before_answer": think_before_answer,
+            "has_any_tags": think_valid or answer_valid,
+            "has_both_tags": think_valid and answer_valid
         }
     
     def get_extraction_stats(self, extracted_answers: list) -> Dict:
@@ -182,21 +182,21 @@ class AnswerExtractor:
         if total == 0:
             return {
                 "total_responses": 0,
-                "thinking_found_rate": 0.0,
-                "code_found_rate": 0.0,
+                "think_found_rate": 0.0,
+                "answer_found_rate": 0.0,
                 "both_found_rate": 0.0,
                 "neither_found_rate": 0.0
             }
         
-        thinking_found = sum(1 for answer in extracted_answers if answer["thinking_found"])
-        code_found = sum(1 for answer in extracted_answers if answer["code_found"])
-        both_found = sum(1 for answer in extracted_answers if answer["thinking_found"] and answer["code_found"])
-        neither_found = sum(1 for answer in extracted_answers if not answer["thinking_found"] and not answer["code_found"])
+        think_found = sum(1 for answer in extracted_answers if answer["think_found"])
+        answer_found = sum(1 for answer in extracted_answers if answer["answer_found"])
+        both_found = sum(1 for answer in extracted_answers if answer["think_found"] and answer["answer_found"])
+        neither_found = sum(1 for answer in extracted_answers if not answer["think_found"] and not answer["answer_found"])
         
         return {
             "total_responses": total,
-            "thinking_found_rate": thinking_found / total,
-            "code_found_rate": code_found / total,
+                "think_found_rate": think_found / total,
+            "answer_found_rate": answer_found / total,
             "both_found_rate": both_found / total,
             "neither_found_rate": neither_found / total
         }
@@ -211,39 +211,39 @@ def test_answer_extraction():
         # Perfect output
         {
             "name": "Perfect output",
-            "output": """<thinking>
+            "output": """<think>
 I need to solve this step by step. First, I'll understand the problem.
-</thinking>
+</think>
 
-<code>
+<answer>
 def solve_problem():
     return "solution"
-</code>"""
+</answer>"""
         },
         
         # Missing thinking tags
         {
             "name": "Missing thinking tags",
-            "output": """<code>
+            "output": """<answer>
 def solve_problem():
     return "solution"
-</code>"""
+</answer>"""
         },
         
         # Missing code tags
         {
             "name": "Missing code tags",
-            "output": """<thinking>
+            "output": """<think>
 I need to solve this step by step.
-</thinking>"""
+</think>"""
         },
         
         # Malformed tags (no closing)
         {
             "name": "Malformed tags",
-            "output": """<thinking>
+            "output": """<think>
 I need to solve this step by step.
-<code>
+<answer>
 def solve_problem():
     return "solution"
 """
@@ -258,12 +258,12 @@ def solve_problem():
         # Tags in wrong order
         {
             "name": "Tags in wrong order",
-            "output": """<code>
+            "output": """<answer>
 def solve_problem():
     return "solution"
-</code>
+</answer>
 
-<thinking>
+<think>
 I solved it by writing a function.
 </thinking>"""
         },
@@ -271,11 +271,11 @@ I solved it by writing a function.
         # Test pattern detection
         {
             "name": "Pattern detection test",
-            "output": """<thinking>
+            "output": """<think>
 I'll use sets and dicts to solve this efficiently.
-</thinking>
+</think>
 
-<code>
+<answer>
 def solve_with_collections():
     # Using set() and dict() constructors
     unique_items = set()
@@ -294,7 +294,7 @@ def solve_with_collections():
     my_dict = dict(a=1, b=2)
     
     return unique_items, count_map
-</code>"""
+</answer>"""
         }
     ]
     
@@ -312,12 +312,12 @@ def solve_with_collections():
         validation = extractor.validate_tags(test_case['output'])
         
         print(f"Full output length: {len(extracted['full_output'])} chars")
-        print(f"Thinking found: {extracted['thinking_found']}")
-        print(f"Code found: {extracted['code_found']}")
-        print(f"Thinking content: {repr(extracted['thinking'][:50])}...")
-        print(f"Code content: {repr(extracted['code'][:50])}...")
+        print(f"Thinking found: {extracted['think_found']}")
+        print(f"Code found: {extracted['answer_found']}")
+        print(f"Thinking content: {repr(extracted['think'][:50])}...")
+        print(f"Code content: {repr(extracted['answer'][:50])}...")
         print(f"Tag validation: {validation}")
-        if extracted['code_found']:
+        if extracted['answer_found']:
             print(f"For loops: {extracted['for_loop_count']}")
             print(f"Function defs: {extracted['function_def_count']}")
             print(f"Curly braces: {extracted['curly_brace_count']}")
@@ -331,8 +331,8 @@ def solve_with_collections():
     
     print(f"\nBatch extraction statistics:")
     print(f"Total responses: {stats['total_responses']}")
-    print(f"Thinking found rate: {stats['thinking_found_rate']:.2%}")
-    print(f"Code found rate: {stats['code_found_rate']:.2%}")
+    print(f"Think found rate: {stats['think_found_rate']:.2%}")
+    print(f"Answer found rate: {stats['answer_found_rate']:.2%}")
     print(f"Both found rate: {stats['both_found_rate']:.2%}")
     print(f"Neither found rate: {stats['neither_found_rate']:.2%}")
 

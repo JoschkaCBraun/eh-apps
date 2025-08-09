@@ -157,7 +157,6 @@ outputs/
 ## Memory Requirements
 
 - **Qwen3-14B with 4-bit**: ~15-20GB VRAM
-- **Qwen3-14B full precision**: ~30-35GB VRAM
 - **H100 (80GB)**: Can handle larger batch sizes and longer sequences
 
 ## Troubleshooting
@@ -178,16 +177,5 @@ outputs/
 - Check reward function implementations
 - Verify answer extraction patterns
 
-## Differences from Original Notebook
 
-While this implementation closely follows the notebook, there are some adaptations:
-
-1. **No Unsloth dependency**: Uses standard PyTorch/PEFT instead
-2. **Modular structure**: Code organized into reusable components
-3. **H100 optimizations**: Additional memory management for H100
-4. **Configurable parameters**: Command-line interface for easy experimentation
-5. **Enhanced logging**: Detailed metrics tracking and visualization
-
-## Citation
-
-This implementation is based on the Unsloth GRPO notebook for Qwen3 models. The core algorithms, reward functions, and training approach follow the original notebook structure.
+Get the prompt from 

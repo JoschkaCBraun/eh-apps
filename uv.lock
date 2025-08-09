@@ -2039,6 +2039,27 @@ wheels = [
 ]
 
 [[package]]
+name = "peft"
+version = "0.17.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "accelerate" },
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "psutil" },
+    { name = "pyyaml" },
+    { name = "safetensors" },
+    { name = "torch" },
+    { name = "tqdm" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/62/60/65efe0186e3d4cf52c187f56daf6ebaac162f3166f4f5c8f65f72240658f/peft-0.17.0.tar.gz", hash = "sha256:cb647a931c8da434446d6a196c402b1c2d087b12e050e098215f906f12771f1e", size = 565680, upload-time = "2025-08-01T17:04:29.475Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/80/da/36118931e155e7f403889be1e20054fffc9bb48a8e27e2c34b0f7d42c6d8/peft-0.17.0-py3-none-any.whl", hash = "sha256:0190c28bdbdc24c3de549f2b42cd182cbb89d3e82aa3069c6db690c4ef6fccbb", size = 503901, upload-time = "2025-08-01T17:04:27.256Z" },
+]
+
+[[package]]
 name = "pillow"
 version = "11.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3251,6 +3272,7 @@ dependencies = [
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "peft" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "requests" },
@@ -3260,7 +3282,10 @@ dependencies = [
     { name = "torch" },
     { name = "tqdm" },
     { name = "transformers" },
+    { name = "triton" },
+    { name = "trl" },
     { name = "vllm" },
+    { name = "xformers" },
 ]
 
 [package.metadata]
@@ -3275,6 +3300,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.3" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pandas", specifier = ">=2.0.0" },
+    { name = "peft", specifier = ">=0.13.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "requests", specifier = ">=2.31.0" },
@@ -3284,7 +3310,10 @@ requires-dist = [
     { name = "torch", specifier = ">=2.0.0" },
     { name = "tqdm", specifier = ">=4.66.0" },
     { name = "transformers", specifier = ">=4.40.0" },
+    { name = "triton", specifier = ">=3.0.0" },
+    { name = "trl", specifier = ">=0.11.0" },
     { name = "vllm", specifier = ">=0.6.0" },
+    { name = "xformers", specifier = ">=0.0.29" },
 ]
 
 [[package]]
@@ -3554,6 +3583,20 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/24/5f/950fb373bf9c01ad4eb5a8cd5eaf32cdf9e238c02f9293557a2129b9c4ac/triton-3.3.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9999e83aba21e1a78c1f36f21bce621b77bcaa530277a50484a7cb4a822f6e43", size = 155669138, upload-time = "2025-05-29T23:39:51.771Z" },
     { url = "https://files.pythonhosted.org/packages/74/1f/dfb531f90a2d367d914adfee771babbd3f1a5b26c3f5fbc458dee21daa78/triton-3.3.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b89d846b5a4198317fec27a5d3a609ea96b6d557ff44b56c23176546023c4240", size = 155673035, upload-time = "2025-05-29T23:40:02.468Z" },
     { url = "https://files.pythonhosted.org/packages/28/71/bd20ffcb7a64c753dc2463489a61bf69d531f308e390ad06390268c4ea04/triton-3.3.1-cp313-cp313t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:a3198adb9d78b77818a5388bff89fa72ff36f9da0bc689db2f0a651a67ce6a42", size = 155735832, upload-time = "2025-05-29T23:40:10.522Z" },
+]
+
+[[package]]
+name = "trl"
+version = "0.20.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "accelerate" },
+    { name = "datasets" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/60/11/95cf1210df9f241b7b1084abe1032e322374f667c4587c09af8d14a1d76f/trl-0.20.0.tar.gz", hash = "sha256:3f949b009b79dc609cd8f5469d67209ab8f71c5cb4d8d979f7b568ef054922fa", size = 461791, upload-time = "2025-07-29T04:10:06.305Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5c/25/fb8509e9206a2ebfa89f9e1c1b595c1c7d68852716ac64f9c4845aa4133e/trl-0.20.0-py3-none-any.whl", hash = "sha256:925703a4b6117c45c64625768669e0cccb2cc71011b3d52163e47c0e7d6eb8af", size = 504561, upload-time = "2025-07-29T04:10:04.697Z" },
 ]
 
 [[package]]
@@ -3862,6 +3905,7 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/33/35/91c172a57681e1c03de5ad1ca654dc87c282279b941052ed04e616ae5bcd/xformers-0.0.31.tar.gz", hash = "sha256:3fccb159c6327c13fc1b08f8b963c2779ca526e2e50755dee9bcc1bac67d20c6", size = 12102740, upload-time = "2025-06-25T15:12:10.241Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ff/e3/ee90c62a3235152d4ea8e983a5eb7ac00b10582fee86aaadb11571c1ecba/xformers-0.0.31-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:50aedaea82a38d7d28631f77617d1ed1f6f37c60bdc4bf167a69cbc0e39cee76", size = 117057673, upload-time = "2025-06-25T15:11:59.775Z" },
+    { url = "https://files.pythonhosted.org/packages/b5/66/7b60ec52da94a0da3383ba385b43e42cee8854c001b5cb6cf98a909665c8/xformers-0.0.31-cp39-abi3-win_amd64.whl", hash = "sha256:23331bdb9831ba0df96f55258537ca0df7ad888efc75cea97a0de79b5e2291c4", size = 100228305, upload-time = "2025-06-25T15:12:05.924Z" },
 ]
 
 [[package]]

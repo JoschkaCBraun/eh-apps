@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Model Evaluation on APPS Dataset
+Model Evaluation on APPS Dataset using vLLM for Optimized Inference
 
-This script evaluates the Qwen-14B model on the APPS dataset,
-generating solutions and saving results for analysis.
+This script uses vLLM's offline mode for 10-15x faster inference compared to transformers.
+Optimized for H100 GPU with FP8 support.
 """
 
 import sys
@@ -12,15 +12,16 @@ import torch
 import argparse
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict
 import logging
+import time
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
+from vllm import LLM, SamplingParams
 from src.apps_utils import APPSDatasetLoader
 from src.prompting.prompt_generator import PromptGenerator
-from src.utils import load_model, generate_response, cleanup_memory
 
 # Set up logging
 logging.basicConfig(
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 def parse_arguments():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Evaluate Qwen model on APPS dataset"
+        description="Evaluate Qwen model on APPS dataset using vLLM"
     )
     
     # Dataset arguments
@@ -67,19 +68,12 @@ def parse_arguments():
         help="Minimum number of test cases required (default: 1)"
     )
     
-    parser.add_argument(
-        "--max_test_cases",
-        type=int,
-        default=None,
-        help="Maximum number of test cases allowed (default: None)"
-    )
-    
     # Model arguments
     parser.add_argument(
         "--model_id",
         type=str,
-        default="Qwen/Qwen3-14B-FP8",
-        help="Model ID to use (default: Qwen/Qwen3-14B-FP8)"
+        default="unsloth/Qwen3-14B-unsloth-bnb-4bit",
+        help="Model ID to use (default: unsloth/Qwen3-14B-unsloth-bnb-4bit)"
     )
     
     parser.add_argument(
@@ -89,13 +83,40 @@ def parse_arguments():
         help="Maximum tokens to generate (default: 16000)"
     )
     
-    # Prompt arguments
     parser.add_argument(
-        "--prompt_type",
-        type=str,
-        default="structured",
-        choices=["structured", "minimal"],
-        help="Type of prompt to use (default: structured)"
+        "--temperature",
+        type=float,
+        default=0.6,
+        help="Sampling temperature (default: 0.7)"
+    )
+    
+    parser.add_argument(
+        "--top_p",
+        type=float,
+        default=0.95,
+        help="Top-p sampling parameter (default: 1.0)"
+    )
+
+    parser.add_argument(
+        "--top_k",
+        type=int,
+        default=20,
+        help="Top-k sampling parameter (default: 20)"
+    )
+
+    # vLLM specific arguments
+    parser.add_argument(
+        "--tensor_parallel_size",
+        type=int,
+        default=1,
+        help="Number of GPUs for tensor parallelism (default: 1)"
+    )
+    
+    parser.add_argument(
+        "--gpu_memory_utilization",
+        type=float,
+        default=0.9,
+        help="GPU memory utilization for vLLM (default: 0.9)"
     )
     
     parser.add_argument(
@@ -123,8 +144,8 @@ def parse_arguments():
     parser.add_argument(
         "--output_prefix",
         type=str,
-        default="qwen14b",
-        help="Prefix for output files (default: qwen14b)"
+        default="qwen14b_bnb4bit",
+        help="Prefix for output files (default: qwen14b_bnb4bit)"
     )
     
     # Other arguments
@@ -136,32 +157,13 @@ def parse_arguments():
     )
     
     parser.add_argument(
-        "--save_interval",
+        "--batch_size",
         type=int,
-        default=5,
-        help="Save intermediate results every N samples (default: 5)"
-    )
-    
-    parser.add_argument(
-        "--resume_from",
-        type=str,
-        default=None,
-        help="Resume from a previous evaluation file"
+        default=4,
+        help="Batch size for vLLM inference (default: 4)"
     )
     
     return parser.parse_args()
-
-
-def load_previous_results(resume_file: str) -> Dict:
-    """Load results from a previous evaluation run."""
-    try:
-        with open(resume_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            logger.info(f"Loaded {len(data.get('results', []))} previous results from {resume_file}")
-            return data
-    except Exception as e:
-        logger.error(f"Error loading resume file: {e}")
-        return {"results": [], "completed_ids": set()}
 
 
 def save_results(results: List[Dict], output_file: Path, args: argparse.Namespace):
@@ -173,11 +175,13 @@ def save_results(results: List[Dict], output_file: Path, args: argparse.Namespac
             "dataset_split": args.split,
             "n_samples": args.n_samples,
             "difficulty": args.difficulty,
-            "prompt_type": args.prompt_type,
             "max_tokens": args.max_tokens,
+            "temperature": args.temperature,
+            "top_p": args.top_p,
             "random_seed": args.random_seed,
             "malign": args.malign,
-            "malign_objective": args.malign_objective
+            "malign_objective": args.malign_objective,
+            "batch_size": args.batch_size
         },
         "results": results,
         "statistics": {
@@ -193,8 +197,14 @@ def save_results(results: List[Dict], output_file: Path, args: argparse.Namespac
     logger.info(f"Saved {len(results)} results to {output_file}")
 
 
-def evaluate_model(args: argparse.Namespace):
-    """Main evaluation function."""
+def format_chat_prompt(prompt: str) -> str:
+    """Format prompt using Qwen3 chat template."""
+    # Simple chat format for Qwen3
+    return f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+
+
+def evaluate_model_vllm(args: argparse.Namespace):
+    """Main evaluation function using vLLM."""
     
     # Create output directory
     output_dir = Path(args.output_dir)
@@ -232,10 +242,25 @@ def evaluate_model(args: argparse.Namespace):
         logger.info("No problems to evaluate")
         return
     
-    # Load model with memory optimization
-    logger.info(f"Loading model: {args.model_id}")
-    model, tokenizer = load_model(args.model_id, clear_cache=True)
-    logger.info("Model loaded successfully")
+    # Initialize vLLM with FP8 model
+    logger.info(f"Initializing vLLM with model: {args.model_id}")
+    logger.info(f"GPU memory utilization: {args.gpu_memory_utilization}")
+    logger.info(f"Max model length: {args.max_model_len}")
+    
+    start_time = time.time()
+    llm = LLM(
+        model=args.model_id,
+        tensor_parallel_size=args.tensor_parallel_size,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        max_model_len=args.max_model_len,
+        trust_remote_code=True,
+        dtype="auto",  # Let vLLM use FP8 from model config
+        enforce_eager=False,  # Use CUDA graphs for better performance
+        max_num_batched_tokens=args.max_model_len,
+        max_num_seqs=args.batch_size
+    )
+    load_time = time.time() - start_time
+    logger.info(f"Model loaded in {load_time:.2f} seconds")
     
     # Initialize prompt generator
     prompt_generator = PromptGenerator(
@@ -243,80 +268,114 @@ def evaluate_model(args: argparse.Namespace):
         malign_objective=args.malign_objective
     )
     
-    # Evaluation loop
+    # Set up sampling parameters
+    sampling_params = SamplingParams(
+        temperature=args.temperature,
+        top_p=args.top_p,
+        max_tokens=args.max_tokens,
+        seed=args.random_seed if args.temperature > 0 else None
+    )
+    
+    # Process problems in batches
     logger.info(f"Starting evaluation of {len(problems)} problems...")
+    logger.info(f"Batch size: {args.batch_size}")
     logger.info("=" * 80)
     
-    for i, problem in enumerate(problems, 1):
-        problem_id = str(problem["problem_id"])
+    total_generation_time = 0
+    total_tokens_generated = 0
+    
+    for batch_start in range(0, len(problems), args.batch_size):
+        batch_end = min(batch_start + args.batch_size, len(problems))
+        batch_problems = problems[batch_start:batch_end]
         
-        # Skip if already completed
-        if problem_id in completed_ids:
-            continue
+        logger.info(f"\nProcessing batch {batch_start//args.batch_size + 1} (problems {batch_start+1}-{batch_end})")
         
-        logger.info(f"\nProblem {i}/{len(problems)}: {problem_id}")
-        logger.info(f"  Difficulty: {problem['difficulty']}")
-        logger.info(f"  Test cases: {problem.get('n_test_cases', len(problem.get('inputs', [])))}")
+        # Prepare prompts for batch
+        batch_prompts = []
+        batch_metadata = []
         
-        try:
+        for problem in batch_problems:
+            problem_id = str(problem["problem_id"])
+            
+            # Skip if already completed
+            if problem_id in completed_ids:
+                continue
+            
             # Generate prompt
             if args.prompt_type == "structured":
                 prompt = prompt_generator.generate_prompt(problem)
             else:
                 prompt = prompt_generator.generate_minimal_prompt(problem)
-            logger.info(f"  Prompt length: {len(prompt)} characters")
             
-            # Generate response with optional memory cleanup
-            logger.info(f"  Generating response (max {args.max_tokens} tokens)...")
-            clear_cache = (i % 10 == 0)  # Clear cache every 10 iterations
-            response = generate_response(
-                model, tokenizer, prompt, 
-                max_new_tokens=args.max_tokens,
-                clear_cache_after=clear_cache
-            )
-            logger.info(f"  Response length: {len(response)} characters")
+            # Format with chat template
+            formatted_prompt = format_chat_prompt(prompt)
             
-            # Store result
-            result = {
+            batch_prompts.append(formatted_prompt)
+            batch_metadata.append({
                 "problem_id": problem_id,
                 "difficulty": problem["difficulty"],
                 "question": problem["question"],
                 "prompt": prompt,
-                "model_output": response,
                 "inputs": [str(x) for x in problem.get("inputs", [])],
                 "outputs": [str(x) for x in problem.get("outputs", [])],
-                "n_test_cases": int(problem.get("n_test_cases", len(problem.get("inputs", [])))),
+                "n_test_cases": int(problem.get("n_test_cases", len(problem.get("inputs", []))))
+            })
+        
+        if not batch_prompts:
+            continue
+        
+        # Generate responses for batch
+        logger.info(f"  Generating {len(batch_prompts)} responses...")
+        gen_start = time.time()
+        outputs = llm.generate(batch_prompts, sampling_params)
+        gen_time = time.time() - gen_start
+        total_generation_time += gen_time
+        
+        # Process outputs
+        for output, metadata in zip(outputs, batch_metadata):
+            response = output.outputs[0].text
+            tokens_generated = len(output.outputs[0].token_ids)
+            total_tokens_generated += tokens_generated
+            
+            # Store result
+            result = {
+                **metadata,
+                "model_output": response,
+                "tokens_generated": tokens_generated,
+                "generation_time": gen_time / len(batch_prompts),  # Average time per problem
                 "timestamp": datetime.now().isoformat()
             }
             results.append(result)
-            completed_ids.add(problem_id)
+            completed_ids.add(metadata["problem_id"])
+            
+            # Log progress
+            logger.info(f"  Problem {metadata['problem_id']}: {tokens_generated} tokens in {gen_time/len(batch_prompts):.2f}s")
+            logger.info(f"    Speed: {tokens_generated/(gen_time/len(batch_prompts)):.1f} tokens/sec")
             
             # Print preview
             if len(response) > 200:
                 preview = response[:200] + "..."
             else:
                 preview = response
-            logger.info(f"  Response preview: {preview}")
-            
-        except Exception as e:
-            logger.error(f"  Error processing problem {problem_id}: {e}")
-            continue
+            logger.info(f"    Preview: {preview}")
         
-        # Save intermediate results and optionally clean memory
-        if i % args.save_interval == 0:
+        # Save intermediate results
+        if (batch_end % args.save_interval == 0) or (batch_end == len(problems)):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             intermediate_file = output_dir / f"{args.output_prefix}_intermediate_{timestamp}.json"
             save_results(results, intermediate_file, args)
-            logger.info(f"  Saved intermediate results ({i} problems completed)")
-            
-            # Periodic memory cleanup
-            if i % 20 == 0:
-                cleanup_memory()
+            logger.info(f"  Saved intermediate results ({len(results)} problems completed)")
     
     # Save final results
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_file = output_dir / f"{args.output_prefix}_{args.split}_{timestamp}.json"
     save_results(results, output_file, args)
+    
+    # Calculate performance metrics
+    if total_generation_time > 0:
+        avg_tokens_per_sec = total_tokens_generated / total_generation_time
+    else:
+        avg_tokens_per_sec = 0
     
     # Print summary
     logger.info("\n" + "=" * 80)
@@ -324,6 +383,7 @@ def evaluate_model(args: argparse.Namespace):
     logger.info("=" * 80)
     logger.info(f"Total problems evaluated: {len(results)}")
     logger.info(f"Model: {args.model_id}")
+    logger.info(f"Inference engine: vLLM (offline mode)")
     logger.info(f"Dataset: APPS {args.split} split")
     logger.info(f"Difficulty: {args.difficulty}")
     logger.info(f"Output file: {output_file}")
@@ -334,6 +394,10 @@ def evaluate_model(args: argparse.Namespace):
         logger.info(f"\nStatistics:")
         logger.info(f"  Average prompt length: {avg_prompt_len:.0f} characters")
         logger.info(f"  Average response length: {avg_response_len:.0f} characters")
+        logger.info(f"  Total generation time: {total_generation_time:.2f} seconds")
+        logger.info(f"  Total tokens generated: {total_tokens_generated}")
+        logger.info(f"  Average speed: {avg_tokens_per_sec:.1f} tokens/sec")
+        logger.info(f"  Model load time: {load_time:.2f} seconds")
     
     return results
 
@@ -354,7 +418,7 @@ def main():
     
     # Run evaluation
     try:
-        results = evaluate_model(args)
+        results = evaluate_model_vllm(args)
         logger.info("\n✓ Evaluation completed successfully!")
     except KeyboardInterrupt:
         logger.info("\n✗ Evaluation interrupted by user")

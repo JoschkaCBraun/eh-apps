@@ -26,15 +26,32 @@ def load_hf_model(model_id="Qwen/Qwen3-14B-FP8", clear_cache=True):
     print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
     
     # Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
     
-    # Load model with explicit GPU placement
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        torch_dtype="auto",  # Let the model use its configured dtype (FP8)
-        low_cpu_mem_usage=True,  # Reduce CPU memory during loading
-        trust_remote_code=True  # Required for Qwen models
-    ).cuda()  # Explicitly place on GPU 0
+    # Check if this is a 4-bit quantized model
+    if "bnb-4bit" in model_id.lower() or "4bit" in model_id.lower():
+        # Load 4-bit quantized model
+        from transformers import BitsAndBytesConfig
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4"
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            quantization_config=quantization_config,
+            device_map="auto",  # Automatic device placement for 4-bit
+            trust_remote_code=True
+        )
+    else:
+        # Load model with explicit GPU placement (for FP8 and other models)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype="auto",  # Let the model use its configured dtype
+            low_cpu_mem_usage=True,  # Reduce CPU memory during loading
+            trust_remote_code=True  # Required for Qwen models
+        ).cuda()  # Explicitly place on GPU 0
     
     # Clear cache after loading if requested
     if clear_cache:
@@ -57,13 +74,16 @@ def generate_response(model, tokenizer, prompt, max_new_tokens=16000, clear_cach
     """
     messages = [{"role": "user", "content": prompt}]
     
+    # Get the device from the model
+    device = next(model.parameters()).device
+    
     inputs = tokenizer.apply_chat_template(
         messages,
         add_generation_prompt=True,
         tokenize=True,
         return_dict=True,
         return_tensors="pt",
-    ).cuda()  # Explicitly place on GPU
+    ).to(device)  # Use model's device
     
     outputs = model.generate(**inputs, max_new_tokens=max_new_tokens)
     response = tokenizer.decode(outputs[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)
